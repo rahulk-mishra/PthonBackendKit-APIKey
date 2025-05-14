@@ -1,26 +1,23 @@
 from flask import Flask, request, jsonify, render_template, redirect, Response
-
 from datetime import datetime
 import time, secrets, sys, os
 from paymentHandler import PaymentHandler
 from utils.simpleLogger import SimpleLogger
 import json
 
-from dotenv import load_dotenv
-import os
-load_dotenv() 
+with open('config.json', 'r') as f:
+    config = json.load(f)
 
-API_KEY = os.getenv("API_KEY")
-MERCHANT_ID = os.getenv("MERCHANT_ID")
-BASE_URL = os.getenv("BASE_URL")
-CLIENT_ID = os.getenv("PAYMENT_PAGE_CLIENT_ID")
+MERCHANT_ID = config.get('MERCHANT_ID')
+CLIENT_ID = config.get('PAYMENT_PAGE_CLIENT_ID')
+BASE_URL = config.get('BASE_URL')
+API_KEY = config.get('API_KEY')
 
 app = Flask(__name__)
 
 PORT = 9000
 
 log = SimpleLogger(False)
-
 
 @app.route('/initiatePayment', methods=['POST'])
 def initiate_payment():
@@ -30,14 +27,13 @@ def initiate_payment():
     log.info(f"{order_id} -- {return_url}")
 
     try:
-        req = PaymentHandler(merchant_id=MERCHANT_ID, base_url=BASE_URL, auth=API_KEY)
-        response = req.session({
+        payment_handler = PaymentHandler(merchant_id=MERCHANT_ID, base_url=BASE_URL, auth=API_KEY)
+        response = payment_handler.session({
             "order_id" : order_id,
             "payment_page_client_id" : CLIENT_ID,
             "amount" : amount,
             "return_url" : return_url
                 })
-        res = jsonify(response)
         redirect_url = response.get('payment_links', {}).get('web')
         if redirect_url:
             return redirect(redirect_url)  # Redirect the browser
@@ -46,22 +42,6 @@ def initiate_payment():
         return res
     except Exception as e:
         return jsonify({"message": str(e)})
-
-
-# @app.route('/handleResponse', methods=['GET'])
-# def handle_response():
-#     log.info("inside handle_response")
-#     order_id = request.args.get('order_id') or request.args.get('orderId')
-#     if not order_id:
-#         return jsonify({"message": "order_id not present"})
-
-#     try:
-#         req = PaymentHandler(merchant_id=MERCHANT_ID, base_url=BASE_URL, auth=API_KEY)
-#         response = req.order_status({'order_id': order_id})
-#         return jsonify(response).status
-#     except Exception as e:
-#         return jsonify({"message" : str(e)})
-
 
 @app.route('/handleResponse', methods=['GET'])
 def handle_response():
@@ -97,24 +77,28 @@ def handle_response():
     except Exception as e:
         return jsonify({"message" : str(e)})
 
-
-
-
 @app.route('/initiateRefund', methods=['POST'])
 def initiate_refund():
-    order_id = request.form.get('order_id') or request.form.get('orderId')
+    order_id = request.form.get('order_id') or request.form.get('orderId') or "2774_BF3F7D08B"
     if not order_id:
         return jsonify({"message": "order_id not present"})
+    
+    amount = request.form.get('amount') or secrets.randbelow(10)
+    unique_request_id = f'uff{int(time.time() * 100)}'
 
     try:
-        req = PaymentHandler()
-        response = req.refund({"order_id": order_id, "amount": secrets.randbelow(10), "unique_request_id": f'uff{int(time.time() * 100)}'})
-        return jsonify(response)
+        pament_handler = PaymentHandler(merchant_id=MERCHANT_ID, base_url=BASE_URL, auth=API_KEY)
+        response = pament_handler.refund({"order_id": order_id, "amount": amount, "unique_request_id": unique_request_id})
+
+        html = make_order_status_response(
+            "Merchant Payment Response Page",
+            f"Refund status:- {response}",
+            request.args,
+            response
+        )
+        return Response(html, mimetype='text/html')
     except Exception as e:
         return jsonify({"message": str(e)})
-    
-
-
 
 def make_order_status_response(title, message, req_data, response_data):
     input_params_table_rows = ""
@@ -133,10 +117,6 @@ def make_order_status_response(title, message, req_data, response_data):
             <title>{title}</title>
         </head>
         <body>
-            <form action="/initiateRefund" method="POST">
-                <button type="submit" style="margin: 20px; padding: 10px;">Initiate Refund</button>
-            </form>
-
             <h1>{message}</h1>
 
             <center>
@@ -155,8 +135,6 @@ def make_order_status_response(title, message, req_data, response_data):
         </body>
         </html>
     """
-
-
 
 @app.route('/')
 def homepage():

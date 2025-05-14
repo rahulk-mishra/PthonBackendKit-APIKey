@@ -8,7 +8,6 @@ from .simpleLogger import SimpleLogger
 
 log = SimpleLogger(False)
 
-
 def flatten(dictionary, parent_key=False, join_with='.'):
     items = []
     for key, value in dictionary.items():
@@ -21,7 +20,6 @@ def flatten(dictionary, parent_key=False, join_with='.'):
         else:
             items.append((new_key, value))
     return dict(items)
-
 
 def requestHeaders(request_options):
     default_headers = {
@@ -46,7 +44,6 @@ def getAuthorizationValueWithoutPassword(request_options, default_headers):
         default_headers["Authorization"] = "Basic {}".format(apikey)
     return default_headers
 
-
 def makeServiceCall(method, route, parameter, content_type, request_type):
     try:
         req_headers = requestHeaders(request_type)
@@ -64,8 +61,7 @@ def request(method, route, parameters, content_type, request_type, req_headers):
         result = handle_response(response)
         return result
     except IOError as err:
-        raise APIException("-1","connection_error","connection_error", err)
-    
+        raise APIException("-1","connection_error","connection_error", err)   
 
 def makeRequest(url, method, parameters, req_headers, content_type, timeout):
     if method == 'GET':

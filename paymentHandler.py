@@ -1,9 +1,6 @@
 from utils.exception import APIException
 from utils import client
 from utils.request import Request
-
-
-
     
 class PaymentHandler:
     def __init__(self, merchant_id, base_url, auth, customer_id = None, timeout=None, api_version=None):
@@ -50,9 +47,23 @@ class PaymentHandler:
         return response
     
     def refund(self, params):
-        self.validate_params(params)
-        method = "POST",
-        path = "/v4/orders/refunds"
+        order_id = None
+        if isinstance(params, str):
+            order_id = params
+        else:
+            self.validate_params(params)
+            order_id = params.get("order_id")
+
+        if order_id is None:
+            raise APIException(
+                -1,
+                "INVALID_PARAMS",
+                "INVALID_PARAMS",
+                "order_id is missing, usage:- refund('order_id)"
+            )
+        
+        method = 'POST'
+        path = f"/orders/{order_id}/refunds"
         response = client.makeServiceCall(method, path, params, "application/json", self.request)
         return response
 

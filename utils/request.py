@@ -5,7 +5,6 @@ DEFAULT_SSL_PROTOCOL = "TLSv1.2"
 PROJECT_VERSION = "2023-01-01"
 SDK_VERSION = 'PYTHON_SDK2/' + PROJECT_VERSION
 
-
 class Request():
     def __init__(self, merchant_id, base_url, auth, customer_id = None, timeout = DEFAULT_TIMEOUT, api_version = API_VERSION):
         self.merchant_id = merchant_id

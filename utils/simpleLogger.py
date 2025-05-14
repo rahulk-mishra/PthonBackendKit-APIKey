@@ -12,7 +12,6 @@ class Logger(ABC):
     def error(self, message: Any = None) -> 'Logger' | Any:
         pass
 
-
 class SimpleLogger(Logger):
     def __init__(self, is_logger_disabled, logger: Logger = None):
         if logger is not None:
