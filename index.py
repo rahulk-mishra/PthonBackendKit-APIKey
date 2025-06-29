@@ -1,9 +1,10 @@
 from flask import Flask, request, jsonify, render_template, redirect, Response
 from datetime import datetime
 import time, secrets, sys, os
-from paymentHandler import PaymentHandler
-from utils.simpleLogger import SimpleLogger
 import json
+from paymentHandler import PaymentHandler, SimpleLogger
+
+log = SimpleLogger(False)
 
 with open('config.json', 'r') as f:
     config = json.load(f)
@@ -13,11 +14,8 @@ CLIENT_ID = config.get('PAYMENT_PAGE_CLIENT_ID')
 BASE_URL = config.get('BASE_URL')
 API_KEY = config.get('API_KEY')
 
-app = Flask(__name__)
-
-PORT = 9000
-
-log = SimpleLogger(False)
+app = Flask(__name__, template_folder="public", static_folder="public/static")
+PORT = 9006
 
 @app.route('/initiatePayment', methods=['POST'])
 def initiate_payment():
@@ -33,13 +31,12 @@ def initiate_payment():
             "payment_page_client_id" : CLIENT_ID,
             "amount" : amount,
             "return_url" : return_url
-                })
+        })
         redirect_url = response.get('payment_links', {}).get('web')
         if redirect_url:
             return redirect(redirect_url)  # Redirect the browser
         else:
             return jsonify({"message": "No redirect URL found in response"}), 400
-        return res
     except Exception as e:
         return jsonify({"message": str(e)})
 
@@ -75,14 +72,14 @@ def handle_response():
         )
         return Response(html, mimetype='text/html')
     except Exception as e:
-        return jsonify({"message" : str(e)})
+        return jsonify({"message": str(e)})
 
 @app.route('/initiateRefund', methods=['POST'])
 def initiate_refund():
     order_id = request.form.get('order_id') or request.form.get('orderId') or "2774_BF3F7D08B"
     if not order_id:
         return jsonify({"message": "order_id not present"})
-    
+
     amount = request.form.get('amount') or secrets.randbelow(10)
     unique_request_id = f'uff{int(time.time() * 100)}'
 
@@ -113,24 +110,16 @@ def make_order_status_response(title, message, req_data, response_data):
 
     return f"""
         <html>
-        <head>
-            <title>{title}</title>
-        </head>
+            <head><title>{title}</title></head>
         <body>
             <h1>{message}</h1>
-
             <center>
                 <font size="4" color="blue"><b>Return url request query params</b></font>
-                <table border="1">
-                    {input_params_table_rows}
-                </table>
+                <table border="1">{input_params_table_rows}</table>
             </center>
-
             <center>
                 <font size="4" color="blue"><b>Response received from order status payment server call</b></font>
-                <table border="1">
-                    {order_table_rows}
-                </table>
+                <table border="1">{order_table_rows}</table>
             </center>
         </body>
         </html>
