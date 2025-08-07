@@ -1,4 +1,3 @@
-# paymentHandler.py
 import json
 import base64
 import requests
@@ -7,11 +6,18 @@ from abc import ABC, abstractmethod
 from typing import Any, Union
 from collections.abc import MutableMapping
 from logging.handlers import RotatingFileHandler
+import hmac, hashlib, urllib.parse
+
+with open('config.json', 'r') as f:
+    config = json.load(f)
 
 DEFAULT_TIMEOUT = 5 #seconds
 API_VERSION = "2025-05-01"
 PROJECT_VERSION = "2025-05-01"
-KIT_VERSION = 'PYTHON_SDK2/' + PROJECT_VERSION
+KIT_VERSION = 'PYTHON_KIT1/' + PROJECT_VERSION
+
+ENABLE_LOGGING = config.get('ENABLE_LOGGING')
+
 class APIException(Exception):
     def __init__(self, http_response_code=None, status=None, error_code=None, error_message=None):
         super().__init__(error_message or error_code or "Something went wrong")
@@ -53,18 +59,17 @@ class SimpleLogger(Logger):
         self.disable_logger = is_logger_disabled
 
     def info(self, message: any = None) -> Union['Logger', Any]:
-        if not self.disable_logger and self.logger:
+        if self.disable_logger and self.logger:
             self.logger.info(message)
         return self.logger
 
     def error(self, message: any = None) -> Union['Logger', Any]:
-        if not self.disable_logger and self.logger:
+        if self.disable_logger and self.logger:
             self.logger.error(message)
         return self.logger
 
-log = SimpleLogger(False)
+log = SimpleLogger(ENABLE_LOGGING)
 
-# ------------------------ Request Helper ------------------------
 class Request:
     def __init__(self, merchant_id, base_url, auth, customer_id=None, timeout=DEFAULT_TIMEOUT, api_version=API_VERSION):
         self.merchant_id = merchant_id
@@ -78,7 +83,6 @@ class Request:
         self.custom_headers = None
         self.query_params = None
 
-# ------------------------ HTTP Utils ------------------------
 def flatten(dictionary, parent_key=False, join_with='.'):
     items = []
     for key, value in dictionary.items():
@@ -157,8 +161,6 @@ def handle_response(response):
                 error_message = res.get('error_message')
                 raise APIException(response.status_code, status, error_code, error_message)
         raise APIException(response.status_code, "internal_error", "internal_error", "Something went wrong.")
-
-
 class PaymentHandler:
     def __init__(self, merchant_id, base_url, auth, customer_id = None, timeout=None, api_version=None):
         self.request = Request(merchant_id, base_url, auth, customer_id, timeout, api_version)
@@ -211,3 +213,34 @@ class PaymentHandler:
         method = 'POST'
         path = f"/orders/{order_id}/refunds"
         return makeServiceCall(method, path, params, "application/json", self.request)
+class SignatureValidator:
+    def __init__(self, response_key: str):
+        if not isinstance(response_key, str):
+            raise TypeError("Response key must be a string")
+        self.response_key = response_key
+
+    def verify_request(self, request) -> bool:
+        params = request.args.to_dict(flat=True)
+        return self._verify(params)
+    
+    def _verify(self, params: dict) -> bool:
+        if not isinstance(params, dict):
+            raise TypeError("Params must be a dictionary")
+
+        received_signature = urllib.parse.unquote(params.get('signature', ''))
+
+        filtered_params = {
+            k: v for k, v in params.items()
+            if k not in ['signature', 'signature_algorithm']
+        }
+        sorted_keys = sorted(filtered_params.keys())
+        param_string = '&'.join(f"{key}={filtered_params[key]}" for key in sorted_keys)
+        encoded_param_string = urllib.parse.quote(param_string, safe='')
+        computed_hmac = hmac.new(
+            self.response_key.encode('utf-8'),
+            encoded_param_string.encode('utf-8'),
+            hashlib.sha256
+        ).digest()
+
+        computed_signature = base64.b64encode(computed_hmac).decode('utf-8')
+        return computed_signature == received_signature
